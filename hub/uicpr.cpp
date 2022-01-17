@@ -32,6 +32,7 @@ int main(int argc, char **argv){
     // 0. [FileGraph] read graph
     std::cout << "(UI-Graph)" << std::endl;
     FileGraph ui_file_graph(train_ui_path, 0);
+    FileGraph iu_file_graph(train_ui_path, -1, ui_file_graph.index2node);
     FileGraph ui_file_graph_neg(train_ui_neg_path, 0, ui_file_graph.index2node);
     std::vector<FileGraph> up_file_graph;
     std::vector<FileGraph> im_file_graph;
@@ -63,6 +64,7 @@ int main(int argc, char **argv){
     // 1. [Sampler] determine what sampler to be used
     VCSampler ui_sampler(&ui_file_graph);
     VCSampler ui_neg_sampler(&ui_file_graph_neg);
+    VCSampler iu_sampler(&iu_file_graph);
     std::vector<VCSampler> up_sampler;
     for (auto graph: up_file_graph)
         up_sampler.push_back(VCSampler(&graph));
@@ -120,10 +122,13 @@ int main(int argc, char **argv){
             {
                 pos_collect.clear();
                 neg_collect.clear();
-                // item + meta
+                // item + neighbor user + meta
                 // item
                 pos_collect.push_back( ui_sampler.draw_a_context(user_collect[0]) ); // pos
-                neg_collect.push_back( ui_neg_sampler.draw_a_context_uniformly() ); // neg
+                neg_collect.push_back( ui_sampler.draw_a_context_uniformly() ); // neg
+                // neighbor user
+                pos_collect.push_back( iu_sampler.draw_a_context(pos_collect[0]) );
+                neg_collect.push_back( iu_sampler.draw_a_context(neg_collect[0]) ); // neg
                 // meta
                 for (int i=0; i<im_sampler.size(); i++)
                 {
@@ -182,18 +187,10 @@ int main(int argc, char **argv){
         }
     }
     monitor.end();
-    // get union of item nodes
-    std::set<long> item_set;
-    for (auto node: ui_file_graph.get_all_to_nodes())
-        item_set.insert(node);
-    for (auto graph: im_file_graph)
-        for (auto node: graph.get_all_from_nodes())
-            item_set.insert(node);
-    std::vector<long> all_item_nodes(item_set.begin(), item_set.end());
-    mapper.save_meta_gcn_to_file(&ui_file_graph, up_file_graph, ui_file_graph.get_all_from_nodes(), save_name_q, 0);
+    mapper.save_uic_gcn_to_file(&ui_file_graph, &ui_file_graph, up_file_graph, ui_file_graph.get_all_from_nodes(), save_name_q, 0);
     for (int i=0; i<up_sampler.size(); i++)
         mapper.save_to_file(&up_file_graph[i], up_file_graph[i].get_all_to_nodes(), save_name_k, 0);
-    mapper.save_meta_gcn_to_file(&im_file_graph.back(), im_file_graph, all_item_nodes, save_name_q, 1);
+    mapper.save_uic_gcn_to_file(&iu_file_graph, &iu_file_graph, im_file_graph, iu_file_graph.get_all_from_nodes(), save_name_q, 1);
     for (int i=0; i<im_sampler.size(); i++)
         mapper.save_to_file(&im_file_graph[i], im_file_graph[i].get_all_to_nodes(), save_name_k, 1);
 

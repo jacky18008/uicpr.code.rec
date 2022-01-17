@@ -411,6 +411,118 @@ void LookupMapper::save_meta_gcn_to_file(FileGraph* main_graph, std::vector<File
 }
 
 
+void LookupMapper::save_uic_gcn_to_file(FileGraph* main_graph, FileGraph* interaction_graph, std::vector<FileGraph>& meta_graphs, std::vector<long> indexes, std::string file_name, int append) {
+    // save multiple gcn into a file
+    // (user, item) & (user/item, context)
+    std::vector<double> fused_embedding(this->dimension, 0.0);
+    std::vector<double> fused_gcn_embedding(this->dimension, 0.0);
+    std::vector<double> meta_embedding(this->dimension, 0.0);
+    std::vector<double> gcn_embedding(this->dimension, 0.0);
+    long branch, from_index, to_index;
+    double weight, weight_sum, num_meta;
+    std::ofstream embedding_file;
+    if (append)
+    {
+        std::cout << "Append Mapper:" << std::endl;
+        embedding_file.open(file_name, std::ios_base::app);
+    }
+    else
+    {
+        std::cout << "Save Mapper:" << std::endl;
+        embedding_file.open(file_name);
+    }
+
+    if (embedding_file)
+    {
+        for (auto from_index: indexes)
+        {
+            branch = main_graph->index_graph[from_index].size();
+            embedding_file << interaction_graph->index2node[from_index];
+            if (branch > 0)
+            {
+                // user <-> item 
+                fused_embedding.assign(this->dimension, 0.0);
+                weight_sum = 0.0;
+                for (auto it: interaction_graph->index_graph[from_index])
+                {
+                    to_index = it.first;
+                    weight = interaction_graph->index_graph[from_index][to_index];
+                    weight_sum += weight;
+                    for (int dim=0; dim!=this->dimension; dim++)
+                    {
+                        fused_embedding[dim] += this->embedding[to_index][dim]*weight;
+                    }
+                }
+                for (int dim=0; dim!=this->dimension; dim++)
+                {
+                    fused_gcn_embedding[dim] += (this->embedding[from_index][dim]+fused_embedding[dim]/weight_sum)/2.0;
+                }
+            }
+            else
+            {
+                for (int dim=0; dim!=this->dimension; dim++)
+                {
+                    fused_gcn_embedding[dim] += this->embedding[from_index][dim];
+                }
+            }
+
+            // meta
+            num_meta=0;
+            gcn_embedding.assign(this->dimension, 0.0);
+            for (int meta_i=0; meta_i<meta_graphs.size(); meta_i++)
+            {
+                branch = meta_graphs[meta_i].index_graph[from_index].size();
+                if (branch > 0)
+                {
+                    // weight avg.
+                    weight_sum = 0.0;
+                    meta_embedding.assign(this->dimension, 0.0);
+                    for (auto it: meta_graphs[meta_i].index_graph[from_index])
+                    {
+                        to_index = it.first;
+                        weight = meta_graphs[meta_i].index_graph[from_index][to_index];
+                        weight_sum += weight;
+                        for (int dim=0; dim!=this->dimension; dim++)
+                        {
+                            meta_embedding[dim] += this->embedding[to_index][dim]*weight;
+                        }
+                    }
+                    for (int dim=0; dim!=this->dimension; dim++)
+                    {
+                        gcn_embedding[dim] += meta_embedding[dim]/weight_sum;
+                    }
+                    num_meta++;
+                }
+            }
+            if (num_meta)
+            {
+                embedding_file << "\t" << (gcn_embedding[0]/num_meta+fused_gcn_embedding[0]);
+                for (int dim=1; dim!=this->dimension; dim++)
+                {
+                    embedding_file << " " << gcn_embedding[dim]/num_meta+fused_gcn_embedding[dim];
+                }
+                embedding_file << std::endl;
+            }
+            else
+            {
+                embedding_file << "\t" << fused_gcn_embedding[0];
+                for (int dim=1; dim!=this->dimension; dim++)
+                {
+                    embedding_file << " " << fused_gcn_embedding[dim];
+                }
+                embedding_file << std::endl;
+            }
+        }
+        std::cout << "\tSave to <" << file_name << ">" << std::endl;
+    }
+    else
+    {
+        std::cout << "\tfail to open file" << std::endl;
+    }
+    embedding_file.close();
+}
+
+
 void LookupMapper::save_meta_avg_to_file(FileGraph* main_graph, std::vector<FileGraph>& meta_graphs, std::vector<long> indexes, std::string file_name, int append) {
     std::vector<double> meta_embedding(this->dimension, 0.0);
     std::vector<double> gcn_embedding(this->dimension, 0.0);

@@ -55,6 +55,12 @@ class LookupMapper {
                                    std::vector<long> indexes,
                                    std::string file_name,
                                    int append);
+        void save_uic_gcn_to_file(FileGraph* main_graph, 
+                                   FileGraph* interaction_graph,
+                                   std::vector<FileGraph>& meta_graphs, 
+                                   std::vector<long> indexes, 
+                                   std::string file_name, 
+                                   int append);
 
         // overload operator
         std::vector<double>& operator[](long index);
